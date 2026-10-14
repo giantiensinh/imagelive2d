@@ -1,0 +1,125 @@
+"""Phase 4 exit gate — same IRR emits equivalently on Route B (nijilive) and Route A (Live2D).
+
+The IRR is the contract; both emitters must represent the same params, the same physics driver->output
+pairs, and the same animation targets. Catching divergence here is independent of the (gated) .moc3."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from image2live2d.backends.live2d.physics3 import physics3
+from image2live2d.backends.live2d.motion3 import motion3
+from image2live2d.backends.nijilive.puppet import build_puppet
+from image2live2d.core.assemble import assemble_rig
+from image2live2d.core.mesh import grid_mesh
+from image2live2d.core.motion import generate_idle
+from image2live2d.core.physics import generate_physics
+from image2live2d.core.rig import author_rig, select_template
+from image2live2d.core.types import Layer, LayerStack
+from image2live2d.irr.schema import SemanticRole as R
+
+
+def _rig():
+    parts = [("face_base", R.face_base, (0.2, 0.5, 0.8, 0.95)),
+             ("eye_l", R.eye_l, (0.30, 0.70, 0.45, 0.78)),
+             ("eye_r", R.eye_r, (0.55, 0.70, 0.70, 0.78)),
+             ("mouth", R.mouth, (0.42, 0.55, 0.58, 0.63)),
+             ("hair_front", R.hair_front, (0.2, 0.75, 0.8, 0.98)),
+             ("hair_back", R.hair_back, (0.2, 0.55, 0.8, 0.95)),
+             ("torso", R.torso, (0.35, 0.20, 0.65, 0.55)),
+             ("clothing", R.clothing, (0.30, 0.05, 0.70, 0.30))]
+    layers, meshes = [], []
+    for i, (pid, role, rect) in enumerate(parts):
+        layers.append(Layer(id=pid, semantic_role=role, texture_path=Path(f"{pid}.png"),
+                            draw_order=i * 10, width=64, height=64))
+        meshes.append(grid_mesh(pid, rect, lambda u, v: 255, grid=2))
+    stack = LayerStack(layers=layers, canvas_width=64, canvas_height=64)
+    auth = author_rig(stack, meshes, select_template(stack))
+    phys = generate_physics(stack, auth.parameters)
+    anims = generate_idle(auth.parameters)
+    return assemble_rig(name="x", source=None, stack=stack, meshes=meshes,
+                        deformers=auth.deformers, parameters=auth.parameters, physics=phys,
+                        animations=anims)
+
+
+def _niji_output_drivers(puppet) -> dict[str, set[str]]:
+    """output_param -> set of driver params, reconstructed from nijilive anchors.
+
+    Each anchor is bound (transform.t.x) by one or more driver params; its child SimplePhysics nodes
+    output to params. So an output's drivers = the params binding its anchor."""
+    name_by_uuid = {p["uuid"]: p["name"] for p in puppet["param"]}
+    # which params bind each anchor uuid via transform.t.x
+    anchor_drivers: dict[int, set[str]] = {}
+    for p in puppet["param"]:
+        for b in p["bindings"]:
+            if b["param_name"].startswith("transform.t."):  # t.x (sway) or t.y (bob)
+                anchor_drivers.setdefault(b["node"], set()).add(p["name"])
+    out: dict[str, set[str]] = {}
+    for child in puppet["nodes"]["children"]:
+        if not child["name"].startswith("physics_anchor_"):
+            continue
+        drivers = anchor_drivers.get(child["uuid"], set())
+        for sp in child["children"]:
+            out[name_by_uuid[sp["param"]]] = drivers
+    return out
+
+
+def test_physics_pairs_match_across_backends():
+    """Both backends hang the same pendulums off the same drivers — with one deliberate exception.
+
+    Cubism **cannot** use a pitch (…Y) driver. Its physics outputs are all ``Type: "Angle"`` — the
+    strand's angle off its rest direction — and a "Y" input slides the anchor straight down the strand,
+    which changes that angle by exactly nothing. So the Cubism emitter drops pitch drivers rather than
+    emit an input that provably does nothing (neither Hiyori nor Akari emits one either). nijilive's
+    SimplePhysics takes pitch as a vertical anchor translation, so it keeps it.
+
+    The IRR remains the superset: it records what *drives* each pendulum, and each backend expresses as
+    much of that as its runtime can.
+    """
+    rig = _rig()
+    niji = _niji_output_drivers(build_puppet(rig).puppet)
+    live2d = {
+        s["Output"][0]["Destination"]["Id"]: {i["Source"]["Id"] for i in s["Input"]}
+        for s in physics3(rig)["PhysicsSettings"]
+    }
+    irr = {ph.output_param: set(ph.all_drivers()) for ph in rig.physics}
+
+    assert niji == irr                 # nijilive expresses every driver the IRR records
+    assert irr                         # non-empty (hair + skirt zones)
+    # Cubism drops pitch as a NO-OP for the horizontal sway chains (a "Y" input can't move an angle
+    # output), but KEEPS it — as an Angle input tipping gravity — for the vertical bounce chains
+    # (pitch_angle=True), the one way a nod moves a down-hanging strand. So "expressible" is per-chain.
+    expressible = {}
+    for ph in rig.physics:
+        drivers = set(ph.all_drivers())
+        expressible[ph.output_param] = drivers if ph.pitch_angle else {d for d in drivers if not d.endswith("Y")}
+    assert live2d == expressible
+    bounce = [ph for ph in rig.physics if ph.pitch_angle]
+    assert bounce, "fixture has no vertical bounce chain — this test is no longer checking pitch"
+    assert all("ParamAngleY" in expressible[ph.output_param] for ph in bounce)   # pitch kept for bounce
+    # and Cubism types that kept pitch as an Angle input (not the inert Y that never moved the hair)
+    by_out = {s["Output"][0]["Destination"]["Id"]: s for s in physics3(rig)["PhysicsSettings"]}
+    for ph in bounce:
+        types = {i["Source"]["Id"]: i["Type"] for i in by_out[ph.output_param]["Input"]}
+        assert types["ParamAngleY"] == "Angle"
+    # skirt zones are multi-driven (body sway + lean) — "all lower body affects the skirt"
+    assert any(len(d) > 1 for d in irr.values())
+
+
+def test_animation_targets_match_across_backends():
+    rig = _rig()
+    puppet = build_puppet(rig).puppet
+    name_by_uuid = {p["uuid"]: p["name"] for p in puppet["param"]}
+
+    niji_idle = puppet["animations"]["idle"]
+    niji_targets = {name_by_uuid[ln["uuid"]] for ln in niji_idle["lanes"]}
+    niji_counts = {name_by_uuid[ln["uuid"]]: len(ln["keyframes"]) for ln in niji_idle["lanes"]}
+
+    anim = next(a for a in rig.animations if a.name == "idle")
+    live2d_targets = {c["Id"] for c in motion3(anim)["Curves"]}
+    irr_targets = {ln.param_id for ln in anim.lanes}
+
+    assert niji_targets == live2d_targets == irr_targets
+    # same number of keyframes per lane on the nijilive side as the IRR
+    for lane in anim.lanes:
+        assert niji_counts[lane.param_id] == len(lane.keyframes)

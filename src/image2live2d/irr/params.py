@@ -1,0 +1,115 @@
+"""Standard parameter catalog.
+
+We adopt **Live2D's standard parameter IDs** verbatim in the IRR. This is a deliberate design
+choice: motion clips (``.motion3.json``), ARKit face-tracking mappings, and TTS lip-sync all key
+off these ids, so the *same* animation data drives both the nijilive (Route B) and Live2D
+(Route A) backends without translation.
+
+Ranges follow Live2D's conventions so exported models feel native in the ecosystem.
+"""
+
+from __future__ import annotations
+
+import re
+
+from .schema import Parameter
+
+# (id, min, max, default)
+_PARAM_SPECS: list[tuple[str, float, float, float]] = [
+    # Head
+    ("ParamAngleX", -30.0, 30.0, 0.0),
+    ("ParamAngleY", -30.0, 30.0, 0.0),
+    ("ParamAngleZ", -30.0, 30.0, 0.0),
+    # Eyes
+    ("ParamEyeLOpen", 0.0, 1.0, 1.0),
+    ("ParamEyeROpen", 0.0, 1.0, 1.0),
+    ("ParamEyeLSmile", 0.0, 1.0, 0.0),   # happy squint "^" — closed onto an upward-arched lid line
+    ("ParamEyeRSmile", 0.0, 1.0, 0.0),
+    ("ParamEyeBallX", -1.0, 1.0, 0.0),
+    ("ParamEyeBallY", -1.0, 1.0, 0.0),
+    # Brows
+    ("ParamBrowLY", -1.0, 1.0, 0.0),
+    ("ParamBrowRY", -1.0, 1.0, 0.0),
+    ("ParamBrowLForm", -1.0, 1.0, 0.0),   # brow tilt: +1 = angry (inner end down), -1 = sad (inner up)
+    ("ParamBrowRForm", -1.0, 1.0, 0.0),
+    # Mouth
+    ("ParamMouthForm", -1.0, 1.0, 0.0),
+    ("ParamMouthOpenY", 0.0, 1.0, 0.0),
+    # Cheek — fades a synthesised blush overlay in (opacity 0 at rest); see core.synth.blush
+    ("ParamCheek", 0.0, 1.0, 0.0),
+    # Body
+    ("ParamBodyAngleX", -10.0, 10.0, 0.0),
+    ("ParamBodyAngleY", -10.0, 10.0, 0.0),
+    ("ParamBodyAngleZ", -10.0, 10.0, 0.0),
+    ("ParamBreath", 0.0, 1.0, 0.0),
+]
+
+# Physics outputs (driven by the physics rig, not directly by an animator).
+_PHYSICS_PARAM_SPECS: list[tuple[str, float, float, float]] = [
+    ("ParamHairFront", -1.0, 1.0, 0.0),
+    ("ParamHairSide", -1.0, 1.0, 0.0),
+    ("ParamHairBack", -1.0, 1.0, 0.0),
+    # Cloth/skirt hem sway, split into left/center/right zones so the hem ripples like cloth and each
+    # zone reacts to the nearest lower-body motion (the near leg + body sway). Non-standard ids.
+    ("ParamSkirtL", -1.0, 1.0, 0.0),
+    ("ParamSkirtC", -1.0, 1.0, 0.0),
+    ("ParamSkirtR", -1.0, 1.0, 0.0),
+    # Chest/bust: a subtle vertical soft-tissue bounce on the front bodice, driven by a body-sway
+    # pendulum (author._bust). Non-standard id; won't be driven by stock ARKit/tracking mappings.
+    ("ParamBustY", -1.0, 1.0, 0.0),
+]
+
+# Limb articulation (Phase 3). NOTE: Live2D has **no canonical arm/leg parameter ids** — these are
+# our own conventions for procedural limb rotation about a shoulder/hip joint. They will NOT be
+# driven by stock motion clips or ARKit mappings (which only key the head/eye/mouth/body params
+# above); animators/motions must target them explicitly. Documented in docs/PHASE3_PLAN.md.
+_LIMB_PARAM_SPECS: list[tuple[str, float, float, float]] = [
+    ("ParamArmLA", -10.0, 10.0, 0.0),   # whole-arm swing about the shoulder
+    ("ParamArmRA", -10.0, 10.0, 0.0),
+    ("ParamLegLA", -10.0, 10.0, 0.0),   # whole-leg swing about the hip
+    ("ParamLegRA", -10.0, 10.0, 0.0),
+    ("ParamArmLB", -10.0, 10.0, 0.0),   # forearm bend about the elbow (lower segment only)
+    ("ParamArmRB", -10.0, 10.0, 0.0),
+    ("ParamLegLB", -10.0, 10.0, 0.0),   # lower-leg bend about the knee
+    ("ParamLegRB", -10.0, 10.0, 0.0),
+]
+
+_ALL = {spec[0]: spec for spec in (*_PARAM_SPECS, *_PHYSICS_PARAM_SPECS, *_LIMB_PARAM_SPECS)}
+
+# Public id constants (importable, autocomplete-friendly).
+STANDARD_PARAM_IDS: tuple[str, ...] = tuple(s[0] for s in _PARAM_SPECS)
+PHYSICS_PARAM_IDS: tuple[str, ...] = tuple(s[0] for s in _PHYSICS_PARAM_SPECS)
+LIMB_PARAM_IDS: tuple[str, ...] = tuple(s[0] for s in _LIMB_PARAM_SPECS)
+
+
+# Dynamically-minted physics-output params, all sharing the standard [-1, 1] range:
+#  * hair strands (P2): a suffixed base id, e.g. a second side-tail is ``ParamHairSide2``.
+#  * accessory appendages (P4): ``ParamAcc0``, ``ParamAcc1``, … one per dangling ornament.
+#  * garment appendages (P4b): ``ParamCloth0``, ``ParamCloth1`` … one per swingable cape/sleeve.
+#  * extra skirt interior zones (P3b): ``ParamSkirtC1``, ``ParamSkirtC2`` … on a wide hem (L/C/R stay
+#    in the catalog above; only the extra interior lobes are minted).
+_DYNAMIC_PARAM_RE = re.compile(
+    r"^(?:ParamHair(?:Front|Side|Back)(?:\d+|\d*V)|ParamAcc\d+|ParamCloth\d+|ParamSkirt[CT]\d+)$"
+)
+# ...V ids (ParamHairFrontV, ParamHairSideV, ParamHairBackV) are the per-role VERTICAL hair-bounce
+# outputs — a nod drops the hair straight down through physics, which the horizontal sway params can't
+# express. One per hair role, driven by ParamAngleY (pitch) fed as an Angle input. See
+# core.rig.author._hair_bounce and core.physics.generate.
+
+
+def make_parameter(param_id: str) -> Parameter:
+    """Create an empty (keyform-less) ``Parameter`` for a known standard id, or a dynamically-minted
+    physics-output id (``ParamHairSide2``, ``ParamAcc0`` …) with the standard [-1, 1] range."""
+    if param_id in _ALL:
+        _id, lo, hi, default = _ALL[param_id]
+        return Parameter(id=_id, min=lo, max=hi, default=default)
+    if _DYNAMIC_PARAM_RE.match(param_id):
+        return Parameter(id=param_id, min=-1.0, max=1.0, default=0.0)
+    raise KeyError(f"unknown standard parameter id {param_id!r}")
+
+
+def standard_parameters(include_physics: bool = True) -> list[Parameter]:
+    """Return the full standard parameter set as empty ``Parameter`` objects, ready for the rig
+    authoring stage to populate with keyforms."""
+    ids = list(STANDARD_PARAM_IDS) + (list(PHYSICS_PARAM_IDS) if include_physics else [])
+    return [make_parameter(i) for i in ids]

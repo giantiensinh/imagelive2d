@@ -1,0 +1,11 @@
+* text=auto eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+*.ipynb text eol=lf
+*.png binary
+*.jpg binary
+*.gif binary
+*.svg binary
+*.psd binary
+*.moc3 binary
+*.inp binary

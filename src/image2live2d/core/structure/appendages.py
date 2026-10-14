@@ -1,0 +1,145 @@
+"""Appendage sway — dangling parts get secondary motion, driven by their kinematic parent.
+
+Two planners share one ``AppendageSpec`` shape and one driver map:
+
+* **accessories** (P4) — earrings, charms, ribbons, a hair bow, a waist tassel — already *follow* the
+  head/body turn rigidly; P4 adds a gentle pendulum so the ornament **swings** as secondary motion,
+  driven by whichever structural group the RigGraph bound it to (a head ornament with the head turn
+  ``ParamAngleX``, a waist charm with the body ``ParamBodyAngleX``). Accessories are ornaments by role,
+  so all of them are safe to give a bounded sway — no free-edge test needed.
+
+* **garment appendages** (P4b) — a cape, a long sleeve, a coattail. These are ``clothing``, not
+  accessories, and unlike a skirt hem they hang from the torso/shoulders, not the waist. The hard part
+  is telling a *swingable* one from a rigid bodice/top: both are clothing. That is exactly what the P1
+  dynamics score decides — a garment with a real **free edge** (a boundary that opens into void, not one
+  glued to the torso) reads as ``gentle``/``dynamic`` and gets a body-driven pendulum; a bodice glued to
+  the torso stays ``rigid`` and is left alone. The free-edge signal comes from the mesh silhouette
+  (``analyze_meshes``), so this stays deterministic and Pillow-free. Skirt hems are owned by the skirt
+  planner and excluded here.
+
+Mesh-based throughout (no alpha PNG): the planners read the graph's parent + the part's mesh, so they
+work in the pure pipeline and tests.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+from ..types import LayerStack
+from ...irr.schema import Mesh, SemanticRole
+from .dynamics import DynamicsVerdict, analyze_meshes
+from .graph import ARM_L, ARM_R, BODY, HEAD, RigGraph
+from .skirt import _bbox, _skirtable
+
+# Gentle light pendulum base for an ornament (mass, drag, length): quick to react, short arc, quick to
+# settle — an accessory is small and should read as a subtle dangle, never a flapping flag.
+_ACC_TUNING = (0.9, 0.14, 0.9)
+
+# A garment appendage (cape/sleeve/coattail) is a larger, heavier sheet than an ornament: more mass and
+# a longer arc, floppier (higher drag) so it lags and settles like fabric rather than a light trinket.
+_GARMENT_TUNING = (1.2, 0.20, 1.1)
+
+# An animal TAIL (cat/fox) is a long, heavy appendage that hangs from the hips and swings in a big lazy
+# arc — very different from a light ear-stud dangle. Heavier + longer + low drag so it lags the body and
+# has a long free follow-through; always driven by the BODY (a tail hangs off the hips, not the head).
+_TAIL_TUNING = (1.7, 0.13, 1.6)
+_TAIL_MIN_HEIGHT = 0.15     # a tail spans at least this fraction of the canvas height...
+_TAIL_MAX_CY = 0.60         # ...and hangs in the lower/mid body (centroid at or below this, y-up) — this
+#                             is what tells a hip-hung tail from a head ornament (ears/pins sit high).
+
+# Per parent group: (primary driver, extra drivers). A head ornament rides the head turn; a body
+# ornament the body sway; a sleeve/cuff rides its ARM's articulation (swing about the shoulder as the
+# primary driver, the elbow bend as an extra) so it lags and flares off the arm instead of the torso.
+# Extras (pitch/roll, elbow) enrich the motion and are present-gated downstream (an arm's params only
+# exist when the limb was articulated, so an arm-driven pendulum simply isn't wired if the arm is rigid).
+_PARENT_CFG: dict[str, tuple[str, tuple[str, ...]]] = {
+    HEAD: ("ParamAngleX", ("ParamAngleY", "ParamAngleZ")),
+    BODY: ("ParamBodyAngleX", ("ParamBodyAngleY", "ParamBodyAngleZ")),
+    ARM_L: ("ParamArmLA", ("ParamArmLB",)),
+    ARM_R: ("ParamArmRA", ("ParamArmRB",)),
+}
+
+
+@dataclass
+class AppendageSpec:
+    """One dangling accessory: its output param, the parent motion that drives its pendulum, and the
+    pendulum material."""
+
+    part_id: str
+    param_id: str
+    driver: str
+    extra_drivers: list[str] = field(default_factory=list)
+    mass: float = _ACC_TUNING[0]
+    drag: float = _ACC_TUNING[1]
+    length: float = _ACC_TUNING[2]
+    is_tail: bool = False        # an animal tail: authored with a bigger swing arc than an ornament
+
+
+def accessory_appendages(stack: LayerStack, meshes: list[Mesh], graph: RigGraph) -> list[AppendageSpec]:
+    """One ``AppendageSpec`` per meshed accessory that the graph bound to a head/body group, in stack
+    order. Param ids are ``ParamAcc0``, ``ParamAcc1``, … (only parented accessories consume an index,
+    so ``author_rig`` and ``generate_physics`` — both calling this — always agree). An accessory with
+    no head/body to ride is skipped (nothing to drive its sway)."""
+    mesh_by_part = {m.part_id: m for m in meshes}
+    specs: list[AppendageSpec] = []
+    n = 0
+    for ly in stack.layers:
+        if ly.semantic_role is not SemanticRole.accessory or ly.id not in mesh_by_part:
+            continue
+        cfg = _PARENT_CFG.get(graph.parent_of(ly.id))
+        if cfg is None:
+            continue
+        tail = _is_tail(mesh_by_part[ly.id])
+        if tail:
+            driver, extras = _PARENT_CFG[BODY]      # a tail hangs off the hips -> body-driven, heavy
+            m0, d0, l0 = _TAIL_TUNING
+        else:
+            driver, extras = cfg
+            m0, d0, l0 = _ACC_TUNING
+        specs.append(AppendageSpec(ly.id, f"ParamAcc{n}", driver, list(extras), m0, d0, l0, is_tail=tail))
+        n += 1
+    return specs
+
+
+def _is_tail(mesh: Mesh) -> bool:
+    """A long appendage hanging in the lower/mid body — an animal tail, not a head ornament."""
+    ys = [y for _, y in mesh.vertices]
+    if not ys:
+        return False
+    height = max(ys) - min(ys)
+    cy = sum(ys) / len(ys)
+    return height >= _TAIL_MIN_HEIGHT and cy <= _TAIL_MAX_CY
+
+
+def garment_appendages(
+    stack: LayerStack, meshes: list[Mesh], graph: RigGraph, *, dynamics=None,
+) -> list[AppendageSpec]:
+    """One ``AppendageSpec`` per swingable clothing appendage (cape, long sleeve, coattail), in stack
+    order. A candidate is a meshed ``clothing`` part that the skirt planner doesn't own (not a hem); it
+    becomes an appendage only if the P1 dynamics score reads its silhouette as non-rigid — i.e. it has a
+    real free edge that hangs into void, the cue that separates a cape from a bodice glued to the torso.
+    Each gets a body-driven pendulum (``ParamCloth0``, ``ParamCloth1`` …); a rigid top is left alone.
+
+    ``dynamics`` (a ``{part_id: PartDynamics}`` map) can be passed to reuse a single mesh analysis across
+    author_rig + generate_physics; otherwise it is computed here. The mesh scan only runs when at least
+    one non-skirt clothing candidate exists, so hair/accessory-only characters pay nothing."""
+    mesh_by_part = {m.part_id: m for m in meshes}
+    all_verts = [v for m in meshes for v in m.vertices]
+    body_box = _bbox(all_verts) if all_verts else None       # same figure box skirt_cloth uses, so a
+    candidates = [ly for ly in stack.layers                   # flared gown is owned by the skirt planner,
+                  if ly.semantic_role is SemanticRole.clothing and ly.id in mesh_by_part  # not double-
+                  and not _skirtable(mesh_by_part[ly.id], body_box=body_box)]             # counted here
+    if not candidates:
+        return []
+    dyn = dynamics if dynamics is not None else {d.part_id: d for d in analyze_meshes(stack, meshes)}
+    specs: list[AppendageSpec] = []
+    n = 0
+    for ly in candidates:
+        d = dyn.get(ly.id)
+        if d is None or d.verdict is DynamicsVerdict.rigid:
+            continue                                # a bodice/top glued to the torso: no free edge, no sway
+        driver, extras = _PARENT_CFG.get(graph.parent_of(ly.id) or BODY)   # clothing rides the body
+        m0, d0, l0 = _GARMENT_TUNING
+        specs.append(AppendageSpec(ly.id, f"ParamCloth{n}", driver, list(extras), m0, d0, l0))
+        n += 1
+    return specs

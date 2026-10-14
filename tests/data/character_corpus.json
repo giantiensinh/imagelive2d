@@ -1,0 +1,330 @@
+{
+  "animepedia_mascot": {
+    "capabilities": [
+      "arm_left",
+      "arm_right",
+      "blink_left",
+      "blink_right",
+      "body_sway",
+      "brow_left",
+      "brow_right",
+      "expressions",
+      "gaze",
+      "head_turn",
+      "leg_left",
+      "leg_right",
+      "mouth_form",
+      "mouth_open"
+    ],
+    "min_parts": 26,
+    "min_physics_chains": 9,
+    "plausibility": []
+  },
+  "blondedrills": {
+    "capabilities": [
+      "arm_left",
+      "arm_right",
+      "blink_left",
+      "blink_right",
+      "body_sway",
+      "brow_left",
+      "brow_right",
+      "expressions",
+      "gaze",
+      "head_turn",
+      "leg_left",
+      "leg_right",
+      "mouth_form",
+      "mouth_open"
+    ],
+    "min_parts": 28,
+    "min_physics_chains": 8,
+    "plausibility": []
+  },
+  "catgirl": {
+    "capabilities": [
+      "arm_left",
+      "arm_right",
+      "blink_left",
+      "blink_right",
+      "body_sway",
+      "brow_left",
+      "brow_right",
+      "expressions",
+      "gaze",
+      "head_turn",
+      "leg_left",
+      "leg_right",
+      "mouth_form",
+      "mouth_open"
+    ],
+    "min_parts": 28,
+    "min_physics_chains": 12,
+    "plausibility": []
+  },
+  "chibi": {
+    "capabilities": [
+      "arm_left",
+      "arm_right",
+      "blink_left",
+      "blink_right",
+      "body_sway",
+      "brow_left",
+      "brow_right",
+      "expressions",
+      "gaze",
+      "head_turn",
+      "leg_left",
+      "leg_right",
+      "mouth_form",
+      "mouth_open"
+    ],
+    "min_parts": 23,
+    "min_physics_chains": 7,
+    "plausibility": []
+  },
+  "chibi_child": {
+    "capabilities": [
+      "blink_left",
+      "blink_right",
+      "body_sway",
+      "brow_left",
+      "brow_right",
+      "expressions",
+      "gaze",
+      "head_turn"
+    ],
+    "min_parts": 12,
+    "min_physics_chains": 5,
+    "plausibility": []
+  },
+  "chibi_kemonomimi": {
+    "capabilities": [
+      "blink_left",
+      "blink_right",
+      "body_sway",
+      "brow_left",
+      "brow_right",
+      "expressions",
+      "gaze",
+      "head_turn",
+      "leg_left",
+      "leg_right",
+      "mouth_form",
+      "mouth_open"
+    ],
+    "min_parts": 23,
+    "min_physics_chains": 11,
+    "plausibility": []
+  },
+  "katie": {
+    "capabilities": [
+      "body_sway"
+    ],
+    "min_parts": 4,
+    "min_physics_chains": 4,
+    "plausibility": [
+      "no_face"
+    ]
+  },
+  "kiki": {
+    "capabilities": [
+      "arm_left",
+      "arm_right",
+      "blink_left",
+      "blink_right",
+      "body_sway",
+      "brow_left",
+      "brow_right",
+      "expressions",
+      "gaze",
+      "head_turn",
+      "mouth_form",
+      "mouth_open"
+    ],
+    "min_parts": 19,
+    "min_physics_chains": 4,
+    "plausibility": []
+  },
+  "konqi": {
+    "capabilities": [
+      "body_sway"
+    ],
+    "min_parts": 1,
+    "min_physics_chains": 1,
+    "plausibility": [
+      "no_face"
+    ]
+  },
+  "lavendergown": {
+    "capabilities": [
+      "arm_left",
+      "arm_right",
+      "blink_left",
+      "blink_right",
+      "body_sway",
+      "brow_left",
+      "brow_right",
+      "expressions",
+      "gaze",
+      "head_turn",
+      "leg_left",
+      "leg_right",
+      "mouth_form",
+      "mouth_open"
+    ],
+    "min_parts": 29,
+    "min_physics_chains": 8,
+    "plausibility": []
+  },
+  "libbie": {
+    "capabilities": [
+      "body_sway",
+      "expressions",
+      "head_turn",
+      "mouth_form",
+      "mouth_open"
+    ],
+    "min_parts": 10,
+    "min_physics_chains": 5,
+    "plausibility": []
+  },
+  "male": {
+    "capabilities": [
+      "arm_left",
+      "arm_right",
+      "blink_left",
+      "blink_right",
+      "body_sway",
+      "brow_left",
+      "brow_right",
+      "expressions",
+      "gaze",
+      "head_turn",
+      "leg_left",
+      "leg_right",
+      "mouth_form",
+      "mouth_open"
+    ],
+    "min_parts": 27,
+    "min_physics_chains": 9,
+    "plausibility": []
+  },
+  "silverdress": {
+    "capabilities": [
+      "arm_left",
+      "arm_right",
+      "blink_left",
+      "blink_right",
+      "body_sway",
+      "brow_left",
+      "brow_right",
+      "expressions",
+      "gaze",
+      "head_turn",
+      "leg_left",
+      "leg_right",
+      "mouth_form",
+      "mouth_open"
+    ],
+    "min_parts": 27,
+    "min_physics_chains": 7,
+    "plausibility": []
+  },
+  "twintails": {
+    "capabilities": [
+      "arm_left",
+      "arm_right",
+      "blink_left",
+      "blink_right",
+      "body_sway",
+      "brow_left",
+      "brow_right",
+      "expressions",
+      "gaze",
+      "head_turn",
+      "leg_left",
+      "leg_right",
+      "mouth_form",
+      "mouth_open"
+    ],
+    "min_parts": 26,
+    "min_physics_chains": 7,
+    "plausibility": []
+  },
+  "wikipetan_adult": {
+    "capabilities": [
+      "arm_left",
+      "arm_right",
+      "blink_left",
+      "blink_right",
+      "body_sway",
+      "brow_left",
+      "brow_right",
+      "expressions",
+      "gaze",
+      "head_turn",
+      "leg_left",
+      "leg_right",
+      "mouth_form",
+      "mouth_open"
+    ],
+    "min_parts": 25,
+    "min_physics_chains": 9,
+    "plausibility": []
+  },
+  "wikipetan_mop": {
+    "capabilities": [
+      "arm_left",
+      "arm_right",
+      "blink_left",
+      "blink_right",
+      "body_sway",
+      "brow_left",
+      "brow_right",
+      "expressions",
+      "gaze",
+      "head_turn",
+      "mouth_form",
+      "mouth_open"
+    ],
+    "min_parts": 26,
+    "min_physics_chains": 9,
+    "plausibility": []
+  },
+  "wikipetan_stand": {
+    "capabilities": [
+      "arm_left",
+      "arm_right",
+      "blink_left",
+      "blink_right",
+      "body_sway",
+      "brow_left",
+      "brow_right",
+      "expressions",
+      "gaze",
+      "head_turn",
+      "mouth_form",
+      "mouth_open"
+    ],
+    "min_parts": 25,
+    "min_physics_chains": 7,
+    "plausibility": [
+      "face_base_incomplete"
+    ]
+  },
+  "woodpecker": {
+    "capabilities": [
+      "body_sway",
+      "expressions",
+      "head_turn",
+      "mouth_form",
+      "mouth_open"
+    ],
+    "min_parts": 11,
+    "min_physics_chains": 7,
+    "plausibility": [
+      "off_centre_mouth"
+    ]
+  }
+}

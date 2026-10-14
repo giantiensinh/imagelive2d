@@ -1,0 +1,100 @@
+===============================================================
+  HƯỚNG DẪN CHẠY image2live2d  (Windows / PowerShell)
+===============================================================
+
+LƯU Ý: Dùng `py -3.13` thay cho `python` (Windows Store alias không hoạt động)
+
+---------------------------------------------------------------
+A. CHẠY TRỰC TIẾP (không cần Docker, không cần GPU)
+---------------------------------------------------------------
+
+# 1. Tạo sample puppet (không cần art, test nhanh)
+py -3.13 -m image2live2d --sample --fullbody -o sample_out/sample.inp
+#   → Tạo file sample_out/sample.inp  (30 parts, 40 params, mở trong nijigenerate)
+
+# 2. Chuyển đổi folder layers {order}_{role}.png → .inp
+py -3.13 -m image2live2d path/to/layers -o character.inp
+
+# 3. Chuyển đổi file PSD → .inp  (+Live2D bundle +.cmo3 nếu cần)
+py -3.13 -m image2live2d --psd hero.psd -o hero.inp
+py -3.13 -m image2live2d --psd hero.psd -o hero.inp --live2d hero_l2d/ --cmo3 hero.cmo3
+
+# 4. Batch nhiều file cùng lúc
+py -3.13 -m image2live2d --batch path/to/roster -o out/
+
+# 5. Mở Web app tại http://127.0.0.1:8000  (kéo thả PSD/ZIP)
+py -3.13 -m image2live2d --serve
+
+# Python API
+#   from image2live2d import convert_psd
+#   result = convert_psd("hero.psd", "out/", live2d=True)
+#   print(result.inp_path, result.passed)
+
+---------------------------------------------------------------
+B. CHẠY BẰNG DOCKER COMPOSE (có GPU — xử lý flat image PNG/JPG)
+---------------------------------------------------------------
+
+# Build + start toàn bộ (app + GPU seethrough container)
+# Lần đầu mất ~30-40 phút do tải PyTorch CUDA ~4GB
+$env:DOCKER_BUILDKIT=1; docker compose --profile gpu up --build
+
+# Chạy nền (detached)
+$env:DOCKER_BUILDKIT=1; docker compose --profile gpu up --build -d
+
+# Xem log seethrough (theo dõi tiến trình build/download model)
+docker compose logs -f seethrough
+
+# Sau khi container chạy xong:
+# → Mở http://localhost:8000
+# → Click "Download See-through models" để tải model weights (~20 GB)
+# → Khi "Ready" thì upload flat image PNG/JPG để decompose
+
+# Dừng (giữ models volume)
+docker compose --profile gpu stop
+
+# Khởi động lại (không cần build lại)
+docker compose --profile gpu start
+
+# Xóa containers (giữ models)
+docker compose --profile gpu down
+
+# Xóa cả models (giải phóng ~20 GB)
+docker compose --profile gpu down -v
+
+---------------------------------------------------------------
+C. TRẠNG THÁI HIỆN TẠI
+---------------------------------------------------------------
+[OK]  py -3.13          → Python 3.13 hoạt động
+[OK]  pip install       → pydantic, pillow, psd-tools, torch đã cài
+[OK]  --sample          → Đã test thành công (30 parts, 40 params)
+[OK]  Docker            → v29.3.1 đã cài, NVIDIA runtime có sẵn
+[OK]  GPU               → RTX 2050 4GB VRAM, driver 617.14, CUDA 13.4
+[ ]  seethrough image  → Đang build (lần đầu ~30-40 phút)
+[ ]  Model weights      → Chưa download (cần ~20 GB, làm sau khi build xong)
+
+CẢNH BÁO: RTX 2050 chỉ có 4 GB VRAM.
+See-through (LayerDiff + Marigold) cần nhiều VRAM hơn.
+Nếu inference báo OOM (out-of-memory), flat image sẽ không chạy được.
+PSD/ZIP conversion vẫn hoạt động bình thường không cần GPU.
+
+---------------------------------------------------------------
+D. FORMAT LAYER DIR  ({order}_{role}.png)
+---------------------------------------------------------------
+Ví dụ tên file hợp lệ:
+  00_background.png
+  05_hair_back.png
+  10_face_base.png
+  15_eye_white_l.png
+  16_eye_white_r.png
+  20_eye_l.png
+  21_eye_r.png
+  25_hair_front.png
+  30_mouth.png
+  35_clothing.png
+
+Các role hợp lệ: face_base, hair_front, hair_side, hair_back,
+  eye_l, eye_r, eye_white_l, eye_white_r, pupil_l, pupil_r,
+  eyebrow_l, eyebrow_r, nose, mouth, mouth_cavity, ear_l, ear_r,
+  blush, neck, torso, arm_l, arm_r, hand_l, hand_r, leg_l, leg_r,
+  clothing, accessory, background, other
+===============================================================
