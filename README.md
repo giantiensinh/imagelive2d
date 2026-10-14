@@ -13,6 +13,7 @@
   <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-blue.svg">
   <a href="https://github.com/Wzhang3912/image2live2d/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Wzhang3912/image2live2d/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="outputs" src="https://img.shields.io/badge/exports-.inp%20%C2%B7%20.moc3%20%C2%B7%20.cmo3-8A2BE2">
+  <a href="https://colab.research.google.com/github/giantiensinh/imagelive2d/blob/main/colab.ipynb"><img alt="Open in Colab" src="https://colab.research.google.com/assets/colab-badge.svg"></a>
 </p>
 
 <p align="center">
